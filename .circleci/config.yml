@@ -62,10 +62,10 @@ jobs:
     steps:
         - kubernetes/install:
             kubectl-version: v1.22.0
-        # - aws-eks/create-cluster:
-        #     cluster-name: nhdlklk-deployment
-        #     node-type: t3.micro
-        #     nodes: 2
+        - aws-eks/create-cluster:
+            cluster-name: nhdlklk-deployment
+            node-type: t3.micro
+            nodes: 2
         - run:
             ignore-failure: true
             command: |
