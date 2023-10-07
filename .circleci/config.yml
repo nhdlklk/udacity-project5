@@ -5,7 +5,7 @@ orbs:
 jobs:
   build-docker:
     environment:
-      IMAGE_NAME: hdlklk/microproject
+      IMAGE_NAME: nhdlklk/microproject
     docker:
       - image: circleci/buildpack-deps:stretch
     steps:
