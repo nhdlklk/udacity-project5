@@ -1,241 +1,247 @@
-version: '2.1'
-orbs:
-  aws-eks: circleci/aws-eks@2.2.0
-  kubernetes: circleci/kubernetes@1.3
-jobs:
-  build-docker:
-    environment:
-      IMAGE_NAME: nhdlklk/microproject
-    docker:
-      - image: circleci/buildpack-deps:stretch
+# Python CircleCI 2.0 configuration file
+# Check https://circleci.com/docs/2.0/language-python/ for more details
+version: 2.1
+
+commands:
+  destroy-environment:
+    description: Destroy back-end and front-end cloudformation stacks given a workflow ID.
+    parameters:
+      Workflow_ID:
+        type: string
+        default: ${CIRCLE_WORKFLOW_ID:0:7}
     steps:
-      - checkout
-      - setup_remote_docker
       - run:
-          name: Build Docker image
+          name: Destroy environments
+          when: on_fail
           command: |
-            pwd
-            ls
-            echo $(($(date +%s%N)/1000000)) >> .version 
-            # echo "date-" + $TIME > .version 
-            docker build -t $IMAGE_NAME:$(cat /home/circleci/project/.version) .
-      - run:
-          name: Publish Docker Image to Docker Hub
-          command: |
-            echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_ID" --password-stdin
-            docker push $IMAGE_NAME:$(cat /home/circleci/project/.version)  
- 
-  build-check:
+            aws cloudformation delete-stack --stack-name udapeople-frontend-<< parameters.Workflow_ID >>
+            aws s3 rb s3://udapeople-<<parameters.Workflow_ID>> --force
+
+jobs:
+  build:
     docker:
-      - image: 'python:3.7.3-stretch'
+      # Use the same Docker base as the project
+      - image: python:3.7.3-stretch
     working_directory: ~/repo
     steps:
       - checkout
       - restore_cache:
           keys:
-            - 'v1-dependencies-{{ checksum "requirements.txt" }}'
+            - v1-dependencies-{{ checksum "requirements.txt" }}
             - v1-dependencies-
       - run:
           name: install dependencies
           command: |
+            cd html
             python3 -m venv venv
             . venv/bin/activate
+            ls ./
             make install
-            # Install hadolint
-            wget -O /bin/hadolint https://github.com/hadolint/hadolint/releases/download/v1.16.3/hadolint-Linux-x86_64
-            chmod +x /bin/hadolint
       - save_cache:
           paths:
             - ./venv
-          key: 'v1-dependencies-{{ checksum "requirements.txt" }}'
-      - run:
-          name: run lint
-          command: |
-            pwd
-            ls
-            . venv/bin/activate
-            make lint
-  create-eks-cluster:
-    docker:
-      - image: cimg/python:3.10
-    steps:
-        - kubernetes/install:
-            kubectl-version: v1.22.0
-        # - aws-eks/create-cluster:
-        #     cluster-name: nghia-deployment
-        #     skip-if-exists: true
-        #     node-type: t3.micro
-        #     nodes: 2
-        # - aws-eks/create-load-balancer:
-        #   cluster-name: nghia-deployment
-        #   service-name: my-service
-        #   port: 80
-        #   target-port: 80
-            #  with-loadcer: true
-        - run:
-            command: |
-                eksctl create cluster --name nhdlklk-deployment --skip-if-exists --region us-east-1 --node-type t3.small --nodes 2
-                # aws eks create-cluster --name nhdlklk-deployment --skip-if-exists
-            name: Test cluster
-  test-cluster:
-    docker:
-      - image: cimg/python:3.10
-    parameters:
-      cluster-name:
-        description: |
-          Name of the EKS cluster
-        type: string
-    steps:
-      - kubernetes/install:
-          kubectl-version: v1.22.0
-      - aws-eks/update-kubeconfig-with-authenticator:
-          cluster-name: << parameters.cluster-name >>
-      - run:
-          command: |
-            kubectl get services
-          name: Test cluster
-  create-deployment:
-    docker:
-        - image: cimg/python:3.10
-    working_directory: ~/repo
-    parameters:
-        cluster-name:
-            description: |
-                Name of the EKS cluster
-            type: string
+          key: v1-dependencies-{{ checksum "requirements.txt" }}
+
+  test:
+    docker: 
+      - image: python:3.7.3-stretch
     steps:
       - checkout
-      - aws-eks/update-kubeconfig-with-authenticator:
-          cluster-name: << parameters.cluster-name >>
-          install-kubectl: true
-      # - aws-eks/create-service:
-      #     cluster-name: nghia-deployment
-      #     service-name: my-service
-      #     port: 80
-      #     target-port: 8000
-      - kubernetes/create-or-update-resource:
-          # get-rollout-status: true
-          resource-file-path: ~/repo/deployment.yaml
-          resource-name: nhdlklk-deployment
-          command: rollout undo
-          revision: <revision-number>
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "requirements.txt" }}
+            - v1-dependencies-
       - run:
+          name: install dependencies
           command: |
-            # kubectl create service my-service --type=LoadBalancer --port=80 --selector app=my-deployment
-            kubectl get deployment
-            kubectl expose deployment nhdlklkhv-deployment --ignore-existing --type=LoadBalancer --port=80
-            kubectl delete service nhdlklkhv-deployment
-            kubectl get services
-          name: Test 
+            cd html
+            python3 -m venv venv
+            . venv/bin/activate
+            ls ./
+            make install
+      - run:
+          name: run test lint
+          command: |
+            cd html
+            . venv/bin/activate
+            make lint
+      - save_cache:
+          paths:
+            - ./venv
+          key: v1-dependencies-{{ checksum "requirements.txt" }}
+
+  build-docker:
+    docker:
+      - image: cimg/go:1.20.3
+        auth:
+          username: $DOCKERHUB_USERNAME
+          password: $DOCKERHUB_PASSWORD
+    steps:
+      - checkout
+      - setup_remote_docker:
+          version: 20.10.14
+      - run:
+          name: Build & push docker
+          command: |
+            cd html
+            chmod +x ./run_docker.sh
+            chmod +x ./upload_docker.sh
+            ./run_docker.sh
+            ./upload_docker.sh
+            
+  deploy-infrastructure:
+    docker:
+      - image: cimg/aws:2023.04
+    steps:
+      - checkout
+      - run:
+          name: Ensure front-end infrastructure exist
+          command: |
+            cat ./.circleci/files/frontend.yml
+            aws cloudformation deploy \
+              --template-file ./.circleci/files/frontend.yml \
+              --tags project=udapeople \
+              --stack-name "udapeople-frontend-${CIRCLE_WORKFLOW_ID:0:7}" \
+              --parameter-overrides ID="${CIRCLE_WORKFLOW_ID:0:7}"
+
+  configure-infrastructure:
+    docker:
+      - image: python:3.11-rc-alpine
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: Install dependencies
+          command: |
+            apk add --update ansible curl tar
+            pip install awscli
+            curl -o kubectl https://amazon-eks.s3.us-west-2.amazonaws.com/1.18.8/2020-09-18/bin/linux/amd64/kubectl
+            chmod +x ./kubectl
+            mv ./kubectl /usr/local/bin
+            kubectl version --short --client
+            curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+            mv /tmp/eksctl /usr/local/bin
+            eksctl version
+            curl -Lo aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.5.9/aws-iam-authenticator_0.5.9_linux_amd64
+            chmod +x ./aws-iam-authenticator
+            mkdir -p $HOME/bin && cp ./aws-iam-authenticator $HOME/bin/aws-iam-authenticator && export PATH=$PATH:$HOME/bin
+            echo 'export PATH=$PATH:$HOME/bin' >> ~/.bashrc
+            aws-iam-authenticator help
+      - run:
+          name: Create cluster
+          command: |
+            export CLUSTER=$(eksctl get cluster --name cluster-udapeople)
+            echo "Get cluster:" ${CLUSTER}
+            if ${CLUSTER}
+            then
+              eksctl create cluster -f .circleci/files/cluster.yml
+            fi
+      
+  deploy-frontend:
+    docker:
+      - image: cimg/aws:2023.04
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: Deploy frontend
+          command: |
+            aws s3 sync html s3://udapeople-${CIRCLE_WORKFLOW_ID:0:7}
+      - destroy-environment:
+          Workflow_ID: ${CIRCLE_WORKFLOW_ID:0:7}
+
+  smoke-test:
+    docker:
+      - image: python:3.7-alpine3.11
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            apk add curl
+      - run:
+          name: Frontend smoke test.
+          command: |
+            URL="http://udapeople-${CIRCLE_WORKFLOW_ID:0:7}.s3-website-us-east-1.amazonaws.com/"            
+            if curl -s ${URL} | grep "This is Udacity Project 5"
+            then
+               return 0
+            else
+               return 1
+            fi
+      - destroy-environment:
+          Workflow_ID: ${CIRCLE_WORKFLOW_ID:0:7}
+
+  cloudfront-update:
+    docker:
+      - image: python:3.7-alpine3.11
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: Install dependencies
+          command: |
+            apk add --update curl nodejs npm
+            pip install awscli
+      - run:
+          name: Update cloudfront distribution
+          command: |
+            export OldWorkflowID=$(aws cloudformation \
+            list-exports --query "Exports[?Name==\`WorkflowID\`].Value" \
+            --no-paginate --output text)
+            curl --insecure https://kvdb.io/2dSoqsWZxrtJh6LEx8bDN2/old_workflow_id -d "${OldWorkflowID}"
+            echo OldWorkflowID >> ~/$OldWorkflowID.txt
+            cat ~/$OldWorkflowID.txt
+            aws cloudformation deploy \
+            --template-file .circleci/files/cloudfront.yml \
+            --stack-name InitialStack \
+            --parameter-overrides WorkflowID="${CIRCLE_WORKFLOW_ID:0:7}" \
+            --tags project=udapeople
+      - destroy-environment
+
+  cleanup:
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: Get old stack workflow id and clean up
+          command: |
+            export OldWorkflowID=$(curl --insecure https://kvdb.io/2dSoqsWZxrtJh6LEx8bDN2/old_workflow_id)
+            export STACKS=($(aws cloudformation list-stacks --query "StackSummaries[*].StackName" --stack-status-filter CREATE_COMPLETE --no-paginate --output text))
+            echo OldWorkflowID: "${OldWorkflowID}"
+            echo CIRCLE_WORKFLOW_ID "${CIRCLE_WORKFLOW_ID:0:7}"
+            echo Stack names: "${STACKS[@]}"
+            # if [[ "${STACKS[@]}" =~ "${OldWorkflowID}" ]]
+            # then
+            #   aws s3 rm "s3://udapeople-${OldWorkflowID}" --recursive
+            #   aws cloudformation delete-stack --stack-name "udapeople-frontend-${OldWorkflowID}"               
+            # fi
+      - destroy-environment
+
 workflows:
-  deployment:
+  default:
     jobs:
-      - build-docker
-      - build-check:
-          requires:
-              - build-docker
-      - create-eks-cluster:
-          requires:
-            - build-check
-      # - test-cluster:
-      #     cluster-name: nghia-deployment
-      #     requires:
-      #       - create-eks-cluster
-      # - create-deployment:
-      #     cluster-name: nghia-deployment
-      #     requires:
-      #       - test-cluster
-      # - aws-eks/delete-cluster:
-      #     cluster-name: nghia-deployment
-          # requires:
-          #   - test-cluster
-
-  # create-cluster:
-  #     docker:
-  #       - image: circleci/aws-eks@1.0.0
-  #     steps:
-  #       - checkout:
-  #           path: .
-  #       - run:
-  #           name: Create cluster
-  #           command: |
-  #             eksctl create cluster --name nghiahv1-cluster --node-type t3.small --nodes 2
-
-  # create-eks-cluster:
-  #     docker:
-  #         - image: cimg/python:3.10
-  #     steps:
-  #         - kubernetes/install:
-  #             kubectl-version: v1.22.0
-  #         - aws-eks/create-cluster:
-  #             cluster-name: eks-demo-deployment
-  #             node-type: t3.micro
-  #             nodes: 2
-  #             with-load-balancer: true
-  #         - run:
-  #             command: |
-  #                 kubectl get services
-  #             name: Test cluster
-
-  # create-k8s-deployment:
-  #     description: |
-  #         Create a kubernetes deployment.
-  #     usage:
-  #         version: "2.1"
-  #         orbs:
-  #             aws-eks: circleci/aws-eks@<<pipeline.parameters.dev-orb-version>>
-  #             kubernetes: circleci/kubernetes@1.3
-  #         jobs:
-  #             create-deployment:
-  #                 docker:
-  #                     - image: cimg/python:3.10
-  #                 parameters:
-  #                     cluster-name:
-  #                         description: |
-  #                             Name of the EKS cluster
-  #                         type: string
-  #                 steps:
-  #                     - checkout
-  #                     - aws-eks/update-kubeconfig-with-authenticator:
-  #                         cluster-name: << parameters.cluster-name >>
-  #                         install-kubectl: true
-  #                     - kubernetes/create-or-update-resource:
-  #                         get-rollout-status: true
-  #                         resource-file-path: tests/nginx-deployment/deployment.yaml
-  #                         resource-name: deployment/nginx-deployment
-  #         workflows:
-  #             deployment:
-  #                 jobs:
-  #                     - aws-eks/create-cluster:
-  #                         cluster-name: eks-demo-deployment
-  #                     - create-deployment:
-  #                         cluster-name: eks-demo-deployment
-  #                         requires:
-  #                             - aws-eks/create-cluster
-  #                     - aws-eks/update-container-image:
-  #                         cluster-name: eks-demo-deployment
-  #                         container-image-updates: nginx=nginx:1.9.1
-  #                         post-steps:
-  #                             - kubernetes/delete-resource:
-  #                                 resource-names: nginx-deployment
-  #                                 resource-types: deployment
-  #                                 wait: true
-  #                         requires:
-  #                             - create-deployment
-  #                         resource-name: deployment/nginx-deployment
-  #                     - aws-eks/delete-cluster:
-  #                         cluster-name: eks-demo-deployment
-  #                         requires:
-  #                             - aws-eks/update-container-image
-
-
-# workflows:
-#   deployment:
-#     jobs:
-#       - build-check
-#       - create-eks-cluster:
-#           requires: [build-check]
-#       # - deploy-app:
-#       #     requires: [my-eks-cluster]
-#       # - create-my-load-balancer:
-#       #     docker: [amazon/eks-cli:latest, my-custom-image:latest]
+      - build
+      - test:
+          requires: [build]
+      # - build-docker:
+      #     requires: [test]
+      # - deploy-infrastructure:
+      #     requires: [build-docker]
+      #     filters:
+      #       branches:
+      #         only: [main]
+      # - configure-infrastructure:
+          # requires: [deploy-infrastructure]
+      # - deploy-frontend:
+      #     requires: [configure-infrastructure]
+      # - smoke-test:
+      #     requires: [deploy-frontend]
+      # - cloudfront-update:
+      #     requires: [smoke-test]
+      # - cleanup:
+      #     requires: [cloudfront-update]
