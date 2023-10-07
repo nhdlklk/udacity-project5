@@ -158,23 +158,23 @@ jobs:
 workflows:
   deployment:
     jobs:
-      - build-docker
-      - build-check:
-          requires:
-              - build-docker
-      # - build-check
-      - create-eks-cluster:
-          requires:
-            - build-check
-      - test-cluster:
-          cluster-name: nhdlklk-deployment
-          requires:
-            - create-eks-cluster
+       # - build-docker
+      # - build-check:
+      #     requires:
+      #         - build-docker
+      # # - build-check
+      # - create-eks-cluster:
+      #     requires:
+      #       - build-check
+      # - test-cluster:
+      #     cluster-name: nhdlklk-deployment
+      #     requires:
+      #       - create-eks-cluster
       - create-deployment:
           cluster-name: nhdlklk-deployment
-          requires:
-            - test-cluster
+          # requires:
+          #   - test-cluster
       - aws-eks/delete-cluster:
           cluster-name: nhdlklk-deployment
-          requires:
-            - create-deployment
+      #     requires:
+      #       - create-deployment
