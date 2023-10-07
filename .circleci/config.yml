@@ -135,10 +135,10 @@ jobs:
              echo ${TAGIMAGE}
              # echo $TAGIMAGE
              sed -i  "s/TAGIMAGE/$TAGIMAGE/g" ~/repo/deployment.yaml
-              cat ~/repo/deployment.yaml
-              kubectl exec deployment.apps/nhdlklk-deployment -- printenv
+             cat ~/repo/deployment.yaml
+             kubectl exec deployment.apps/nhdlklk-deployment -- printenv
              kubectl apply -f ~/repo/deployment.yaml
-              kubectl rollout restart
+             kubectl rollout restart
              kubectl get deployment
              kubectl rollout status deployment.apps/nhdlklk-deployment
 
@@ -150,7 +150,7 @@ jobs:
                echo "create services"
                kubectl expose deployment nhdlklk-deployment --type=LoadBalancer --port=80
             # fi
-            kubectl delete service nhdlklk-deployment
+             kubectl delete service nhdlklk-deployment
              kubectl rollout status deploy deployment.apps/nhdlklk-deployment
              kubectl get services
              kubectl get pods
