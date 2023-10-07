@@ -9,7 +9,7 @@ dockerpath="nhdlklk/microproject:${CIRCLE_WORKFLOW_ID:0:7}"
 
 # Step 2:  
 # Authenticate & tag
-docker login -u="$DOCKERHUB_USERNAME" -p="$DOCKERHUB_PASSWORD"
+docker login -u="$DOCKER_ID" -p="$DOCKER_PASSWORD"
 docker tag microproject ${dockerpath}
 echo "Docker ID and Image: $dockerpath"
 
