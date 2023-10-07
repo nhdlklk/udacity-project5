@@ -228,20 +228,20 @@ workflows:
       - build
       - test:
           requires: [build]
-      # - build-docker:
-      #     requires: [test]
-      # - deploy-infrastructure:
-      #     requires: [build-docker]
-      #     filters:
-      #       branches:
-      #         only: [main]
-      # - configure-infrastructure:
-          # requires: [deploy-infrastructure]
-      # - deploy-frontend:
-      #     requires: [configure-infrastructure]
-      # - smoke-test:
-      #     requires: [deploy-frontend]
-      # - cloudfront-update:
-      #     requires: [smoke-test]
-      # - cleanup:
-      #     requires: [cloudfront-update]
+      - build-docker:
+          requires: [test]
+      - deploy-infrastructure:
+          requires: [build-docker]
+          filters:
+            branches:
+              only: [main]
+      - configure-infrastructure:
+          requires: [deploy-infrastructure]
+      - deploy-frontend:
+          requires: [configure-infrastructure]
+      - smoke-test:
+          requires: [deploy-frontend]
+      - cloudfront-update:
+          requires: [smoke-test]
+      - cleanup:
+          requires: [cloudfront-update]
