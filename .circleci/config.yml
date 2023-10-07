@@ -163,13 +163,13 @@ workflows:
       #     requires:
       #         - build-docker
       # # - build-check
-      - create-eks-cluster:
-          requires:
-            - build-check
-      - test-cluster:
-          cluster-name: nhdlklk-deployment
-          requires:
-            - create-eks-cluster
+      # - create-eks-cluster:
+      #     requires:
+      #       - build-check
+      # - test-cluster:
+      #     cluster-name: nhdlklk-deployment
+      #     requires:
+      #       - create-eks-cluster
       - create-deployment:
           cluster-name: nhdlklk-deployment
           # requires:
