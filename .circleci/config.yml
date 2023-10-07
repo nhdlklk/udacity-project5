@@ -131,29 +131,29 @@ jobs:
           resource-file-path: ~/repo/deployment.yaml
       - run:
           command: |
-             export TAGIMAGE=${CIRCLE_WORKFLOW_ID:0:7}
-             echo ${TAGIMAGE}
-             # echo $TAGIMAGE
-             sed -i  "s/TAGIMAGE/$TAGIMAGE/g" ~/repo/deployment.yaml
-             cat ~/repo/deployment.yaml
-             kubectl exec deployment.apps/nhdlklk-deployment -- printenv
-             kubectl apply -f ~/repo/deployment.yaml
-             kubectl rollout restart
-             kubectl get deployment
-             kubectl rollout status deployment.apps/nhdlklk-deployment
+            export TAGIMAGE=${CIRCLE_WORKFLOW_ID:0:7}
+            echo ${TAGIMAGE}
+            # echo $TAGIMAGE
+            sed -i  "s/TAGIMAGE/$TAGIMAGE/g" ~/repo/deployment.yaml
+            cat ~/repo/deployment.yaml
+            kubectl exec deployment.apps/nhdlklk-deployment -- printenv
+            kubectl apply -f ~/repo/deployment.yaml
+            kubectl rollout restart
+            kubectl get deployment
+            kubectl rollout status deployment.apps/nhdlklk-deployment
 
-             kubectl get services >> .services
-             if grep -q "nhdlklk-deployment" .services
-             then
-               echo "ignore create services"
-             else  
-               echo "create services"
-               kubectl expose deployment nhdlklk-deployment --type=LoadBalancer --port=80
+            kubectl get services >> .services
+            if grep -q "nhdlklk-deployment" .services
+            then
+              echo "ignore create services"
+            else  
+              echo "create services"
+              kubectl expose deployment nhdlklk-deployment --type=LoadBalancer --port=80
             # fi
-             kubectl delete service nhdlklk-deployment
-             kubectl rollout status deploy deployment.apps/nhdlklk-deployment
-             kubectl get services
-             kubectl get pods
+            kubectl delete service nhdlklk-deployment
+            kubectl rollout status deploy deployment.apps/nhdlklk-deployment
+            kubectl get services
+            kubectl get pods
           name: deploy EKS 
 workflows:
   deployment:
