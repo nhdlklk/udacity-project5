@@ -5,11 +5,12 @@
 # Step 1:
 # This is your Docker ID/path
 # dockerpath=<>
-dockerpath="nhdlklk/microproject:${CIRCLE_WORKFLOW_ID:0:7}"
-
+dockerpath="nhdlklk/microproject:latest"
 # Step 2
 # Run the Docker Hub container with kubernetes
-kubectl run microproject --image=$dockerpath --port=80 --labels app=microproject
+kubectl run microproject\
+    --image=$dockerpath\
+    --port=80 --labels app=microproject
 
 # Step 3:
 # List kubernetes pods

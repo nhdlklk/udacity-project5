@@ -5,7 +5,7 @@
 
 # Step 1:
 # Create dockerpath
-dockerpath="nhdlklk/microproject:${CIRCLE_WORKFLOW_ID:0:7}"
+dockerpath="nhdlklk/microproject:latest"
 
 # Step 2:  
 # Authenticate & tag
