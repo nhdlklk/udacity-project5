@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nhdlklk-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nhdlklk-deployment
+  template:
+    metadata:
+      labels:
+        app: nhdlklk-deployment
+    spec:
+      containers:
+      - name: nhdlklk-container
+        image: nhdlklk/microproject:ver-TAGIMAGE
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
