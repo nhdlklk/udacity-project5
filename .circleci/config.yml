@@ -2,6 +2,7 @@ version: '2.1'
 orbs:
   aws-eks: circleci/aws-eks@2.2.0
   kubernetes: circleci/kubernetes@1.3
+  aws-cli: circleci/aws-cli@1.0.0
 jobs:
   build-docker:
     environment:
@@ -16,7 +17,8 @@ jobs:
           command: |
             pwd
             ls
-            echo $(($(date +%s%N)/1000000)) >> .version 
+            # echo $(($(date +%s%N)/1000000)) >> .version 
+            echo ${CIRCLE_WORKFLOW_ID:0:7} >> .version 
             # echo "date-" + $TIME > .version 
             docker build -t $IMAGE_NAME:$(cat /home/circleci/project/.version) .
       - run:
@@ -63,7 +65,6 @@ jobs:
             kubectl-version: v1.22.0
         # - aws-eks/create-cluster:
         #     cluster-name: nghia-deployment
-        #     skip-if-exists: true
         #     node-type: t3.micro
         #     nodes: 2
         # - aws-eks/create-load-balancer:
@@ -74,8 +75,17 @@ jobs:
             #  with-loadcer: true
         - run:
             command: |
-                eksctl create cluster --name nhdlklk-deployment --skip-if-exists --region us-east-1 --node-type t3.small --nodes 2
-                # aws eks create-cluster --name nhdlklk-deployment --skip-if-exists
+                curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+                sudo mv /tmp/eksctl /usr/local/bin
+                #  echo ${CIRCLE_WORKFLOW_ID:0:7} >> .version 
+                curl --silent --location https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip > awscli.zip
+                unzip awscli.zip
+                sudo ./aws/install
+                aws cloudformation describe-stacks --stack-name eksctl-nhdlklk-deployment-cluster
+                
+                # eksctl create cluster --name nhdlklk-deployment --skip-if-exists --region us-east-1 --node-type t3.small --nodes 2
+                # eksctl create cluster --name nhdlklk-deployment --region us-east-1 --node-type t3.small --nodes 2
+                # aws create cluster --name nhdlklk-deployment --skip-if-exists --region us-east-1 --node-type t3.small --nodes 2
             name: Test cluster
   test-cluster:
     docker:
@@ -101,7 +111,7 @@ jobs:
     parameters:
         cluster-name:
             description: |
-                Name of the EKS cluster
+              Name of the EKS cluster
             type: string
     steps:
       - checkout
@@ -117,13 +127,13 @@ jobs:
           # get-rollout-status: true
           resource-file-path: ~/repo/deployment.yaml
           resource-name: nhdlklk-deployment
-          command: rollout undo
-          revision: <revision-number>
+          # command: rollout undo
+          # revision: <revision-number>
       - run:
           command: |
             # kubectl create service my-service --type=LoadBalancer --port=80 --selector app=my-deployment
             kubectl get deployment
-            kubectl expose deployment nhdlklkhv-deployment --ignore-existing --type=LoadBalancer --port=80
+            kubectl expose deployment nhdlklkhv-deployment --type=LoadBalancer --port=80
             kubectl delete service nhdlklkhv-deployment
             kubectl get services
           name: Test 
@@ -134,17 +144,17 @@ workflows:
       - build-check:
           requires:
               - build-docker
-      # - create-eks-cluster:
-      #     requires:
-      #       - build-check
-      # - test-cluster:
-      #     cluster-name: nghia-deployment
-      #     requires:
-      #       - create-eks-cluster
-      # - create-deployment:
-      #     cluster-name: nghia-deployment
-      #     requires:
-      #       - test-cluster
+      - create-eks-cluster:
+          requires:
+            - build-check
+      - test-cluster:
+          cluster-name: nhdlklk-deployment
+          requires:
+            - create-eks-cluster
+      - create-deployment:
+          cluster-name: nhdlklk-deployment
+          requires:
+            - test-cluster
       # - aws-eks/delete-cluster:
       #     cluster-name: nghia-deployment
           # requires:
