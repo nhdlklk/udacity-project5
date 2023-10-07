@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nhdlklk-deployment
+  name: nhdlklkhv-deployment
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: nhdlklk-deployment
+      app: nhdlklkhv-deployment
   template:
     metadata:
       labels:
-        app: nhdlklk-deployment
+        app: nhdlklkhv-deployment
     spec:
       containers:
       - name: nhdlklk-container

@@ -1,54 +1,89 @@
-# version: 2.1
-
-# jobs:
-#   build-check:
-#     docker:
-#       - image: 'python:3.7.3-stretch'
-#     working_directory: ~/repo
-#     steps:
-#       - checkout
-#       - restore_cache:
-#           keys:
-#             - 'v1-dependencies-{{ checksum "requirements.txt" }}'
-#             - v1-dependencies-
-#       - run:
-#           name: install dependencies
-#           command: |
-#             python3 -m venv venv
-#             . venv/bin/activate
-#             make install
-#             # Install hadolint
-#             wget -O /bin/hadolint https://github.com/hadolint/hadolint/releases/download/v1.16.3/hadolint-Linux-x86_64
-#             chmod +x /bin/hadolint
-#       - save_cache:
-#           paths:
-#             - ./venv
-#           key: 'v1-dependencies-{{ checksum "requirements.txt" }}'
-#       - run:
-#           name: run lint
-#           command: |
-#             . venv/bin/activate
-#             make lint
-
 version: '2.1'
 orbs:
   aws-eks: circleci/aws-eks@2.2.0
   kubernetes: circleci/kubernetes@1.3
+  aws-cli: circleci/aws-cli@1.0.0
 jobs:
+  build-docker:
+    environment:
+      IMAGE_NAME: nhdlklk/microproject
+    docker:
+      - image: circleci/buildpack-deps:stretch
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: Build Docker image
+          command: |
+            pwd
+            ls
+            echo ver-${CIRCLE_WORKFLOW_ID:0:7} >> .version 
+            cat .version
+            docker build -t $IMAGE_NAME:$(cat /home/circleci/project/.version) .
+      - run:
+          name: Publish Docker Image to Docker Hub
+          command: |
+            echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_ID" --password-stdin
+            docker push $IMAGE_NAME:$(cat /home/circleci/project/.version)  
+ 
+  build-check:
+    docker:
+      - image: 'python:3.7.3-stretch'
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - 'v1-dependencies-{{ checksum "requirements.txt" }}'
+            - v1-dependencies-
+      - run:
+          name: install dependencies
+          command: |
+            python3 -m venv venv
+            . venv/bin/activate
+            make install
+            # Install hadolint
+            wget -O /bin/hadolint https://github.com/hadolint/hadolint/releases/download/v1.16.3/hadolint-Linux-x86_64
+            chmod +x /bin/hadolint
+      - save_cache:
+          paths:
+            - ./venv
+          key: 'v1-dependencies-{{ checksum "requirements.txt" }}'
+      - run:
+          name: run lint
+          command: |
+            pwd
+            ls
+            . venv/bin/activate
+            make lint
   create-eks-cluster:
     docker:
-        - image: cimg/python:3.10
+      - image: cimg/python:3.10
     steps:
         - kubernetes/install:
             kubectl-version: v1.22.0
-        - aws-eks/create-cluster:
-            cluster-name: nhdlklk-deployment
-            node-type: t3.micro
-            nodes: 2
-            # with-load-balancer: true
+        # - aws-eks/create-cluster:
+        #     cluster-name: nhdlklk-deployment
+        #     node-type: t3.micro
+        #     nodes: 2
         - run:
+            ignore-failure: true
             command: |
-                kubectl get services
+                curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+                sudo mv /tmp/eksctl /usr/local/bin
+                #  echo ${CIRCLE_WORKFLOW_ID:0:7} >> .version 
+                curl --silent --location https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip > awscli.zip
+                unzip awscli.zip
+                sudo ./aws/install
+                aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE >> .clound
+                pwd
+                if grep -q "eksctl-nhdlklk-deployment-cluster" .clound
+                then
+                  echo "ignore create cluster"
+                else  
+                  echo "create cluster"
+                  eksctl create cluster --name nhdlklk-deployment --region us-east-1 --node-type t3.small --nodes 2
+                fi
             name: Test cluster
   test-cluster:
     docker:
@@ -70,123 +105,76 @@ jobs:
   create-deployment:
     docker:
         - image: cimg/python:3.10
+    working_directory: ~/repo
     parameters:
         cluster-name:
             description: |
-                Name of the EKS cluster
+              Name of the EKS cluster
             type: string
     steps:
       - checkout
       - aws-eks/update-kubeconfig-with-authenticator:
           cluster-name: << parameters.cluster-name >>
           install-kubectl: true
-      - kubernetes/create-or-update-resource:
-          get-rollout-status: true
-          resource-file-path: /deployment.yaml
-          resource-name: deployment/nhdlklk-deployment
+      # - aws-eks/create-service:
+      #     cluster-name: nhdklk-deployment
+      #     service-name: my-service
+      #     port: 80
+      #     target-port: 8000
+      # - kubernetes/create-or-update-resource:
+      #     resource-file-path: ~/repo/deployment.yaml
+      #     get-rollout-status: true
+      #     resource-name: deployment.apps/nhdlklkhv-deployment
+      #     # command: rollout undo
+      #     # revision: <revision-number>
+      # - kubernetes/create-or-update-resource:
+      #     resource-file-path: ~/repo/deployment.yaml
+      - run:
+          command: |
+            # export TAGIMAGE=${CIRCLE_WORKFLOW_ID:0:7}
+            # echo ${TAGIMAGE}
+            # # echo $TAGIMAGE
+            # sed -i  "s/TAGIMAGE/$TAGIMAGE/g" ~/repo/deployment.yaml
+            # # cat ~/repo/deployment.yaml
+            # # kubectl exec deployment.apps/nhdlklkhv-deployment -- printenv
+            # kubectl apply -f ~/repo/deployment.yaml
+            # # kubectl rollout restart
+            # kubectl get deployment
+            # kubectl rollout status deployment.apps/nhdlklkhv-deployment
+
+            # kubectl get services >> .services
+            # if grep -q "nhdlklkhv-deployment" .services
+            # then
+            #   echo "ignore create services"
+            # else  
+            #   echo "create services"
+            #   kubectl expose deployment nhdlklkhv-deployment --type=LoadBalancer --port=80
+            # fi
+            kubectl delete service nhdlklkhv-deployment
+            # kubectl rollout status deploy deployment.apps/nhdlklkhv-deployment
+            # kubectl get services
+            # kubectl get pods
+          name: deploy EKS 
 workflows:
   deployment:
     jobs:
-      - create-eks-cluster
-      - test-cluster:
-          cluster-name: nhdlklk-deployment
-          requires:
-            - create-eks-cluster
+      # - build-docker
+      # - build-check:
+      #     requires:
+      #         - build-docker
+      # # - build-check
+      # - create-eks-cluster:
+      #     requires:
+      #       - build-check
+      # - test-cluster:
+      #     cluster-name: nhdlklk-deployment
+      #     requires:
+      #       - create-eks-cluster
       - create-deployment:
           cluster-name: nhdlklk-deployment
-          requires:
-            - test-cluster
-      # - aws-eks/delete-cluster:
-      #     cluster-name: nghia-deployment
+          # requires:
+          #   - test-cluster
+      - aws-eks/delete-cluster:
+          cluster-name: nhdlklk-deployment
       #     requires:
-      #       - test-cluster
-
-  # create-cluster:
-  #     docker:
-  #       - image: circleci/aws-eks@1.0.0
-  #     steps:
-  #       - checkout:
-  #           path: .
-  #       - run:
-  #           name: Create cluster
-  #           command: |
-  #             eksctl create cluster --name nghiahv1-cluster --node-type t3.small --nodes 2
-
-  # create-eks-cluster:
-  #     docker:
-  #         - image: cimg/python:3.10
-  #     steps:
-  #         - kubernetes/install:
-  #             kubectl-version: v1.22.0
-  #         - aws-eks/create-cluster:
-  #             cluster-name: eks-demo-deployment
-  #             node-type: t3.micro
-  #             nodes: 2
-  #             with-load-balancer: true
-  #         - run:
-  #             command: |
-  #                 kubectl get services
-  #             name: Test cluster
-
-  # create-k8s-deployment:
-  #     description: |
-  #         Create a kubernetes deployment.
-  #     usage:
-  #         version: "2.1"
-  #         orbs:
-  #             aws-eks: circleci/aws-eks@<<pipeline.parameters.dev-orb-version>>
-  #             kubernetes: circleci/kubernetes@1.3
-  #         jobs:
-  #             create-deployment:
-  #                 docker:
-  #                     - image: cimg/python:3.10
-  #                 parameters:
-  #                     cluster-name:
-  #                         description: |
-  #                             Name of the EKS cluster
-  #                         type: string
-  #                 steps:
-  #                     - checkout
-  #                     - aws-eks/update-kubeconfig-with-authenticator:
-  #                         cluster-name: << parameters.cluster-name >>
-  #                         install-kubectl: true
-  #                     - kubernetes/create-or-update-resource:
-  #                         get-rollout-status: true
-  #                         resource-file-path: tests/nginx-deployment/deployment.yaml
-  #                         resource-name: deployment/nginx-deployment
-  #         workflows:
-  #             deployment:
-  #                 jobs:
-  #                     - aws-eks/create-cluster:
-  #                         cluster-name: eks-demo-deployment
-  #                     - create-deployment:
-  #                         cluster-name: eks-demo-deployment
-  #                         requires:
-  #                             - aws-eks/create-cluster
-  #                     - aws-eks/update-container-image:
-  #                         cluster-name: eks-demo-deployment
-  #                         container-image-updates: nginx=nginx:1.9.1
-  #                         post-steps:
-  #                             - kubernetes/delete-resource:
-  #                                 resource-names: nginx-deployment
-  #                                 resource-types: deployment
-  #                                 wait: true
-  #                         requires:
-  #                             - create-deployment
-  #                         resource-name: deployment/nginx-deployment
-  #                     - aws-eks/delete-cluster:
-  #                         cluster-name: eks-demo-deployment
-  #                         requires:
-  #                             - aws-eks/update-container-image
-
-
-# workflows:
-#   deployment:
-#     jobs:
-#       - build-check
-#       - create-eks-cluster:
-#           requires: [build-check]
-#       # - deploy-app:
-#       #     requires: [my-eks-cluster]
-#       # - create-my-load-balancer:
-#       #     docker: [amazon/eks-cli:latest, my-custom-image:latest]
+      #       - create-deployment
