@@ -42,7 +42,7 @@ jobs:
         - kubernetes/install:
             kubectl-version: v1.22.0
         - aws-eks/create-cluster:
-            cluster-name: nghia-deployment
+            cluster-name: nhdlklk-deployment
             node-type: t3.micro
             nodes: 2
             # with-load-balancer: true
@@ -89,7 +89,7 @@ workflows:
     jobs:
       - create-eks-cluster
       - test-cluster:
-          cluster-name: nghia-deployment
+          cluster-name: nhdlklk-deployment
           requires:
             - create-eks-cluster
       - create-deployment:
